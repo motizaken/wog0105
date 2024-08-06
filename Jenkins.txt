@@ -1,0 +1,63 @@
+pipeline {
+    agent any
+    environment {
+        DOCKER_IMAGE = 'wog0105-web'
+        CONTAINER_NAME = 'wog0105a'  // Updated container name
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/motizaken/wog0105.git'
+            }
+        }
+        stage('Build') {
+            steps {
+                script {
+                    docker.build(DOCKER_IMAGE)
+                }
+            }
+        }
+        stage('Run') {
+            steps {
+                script {
+                    // Check if a container with the name already exists
+                    def existingContainers = sh(script: "docker ps -a -q -f name=${CONTAINER_NAME}", returnStdout: true).trim()
+                    if (existingContainers) {
+                        // Stop and remove existing container
+                        sh "docker stop ${CONTAINER_NAME} || true"
+                        sh "docker rm ${CONTAINER_NAME} || true"
+                    }
+                    
+                    // Run the new container
+                    sh "docker run -d -p 8777:5001 --name ${CONTAINER_NAME} ${DOCKER_IMAGE}"
+                }
+            }
+        }
+        stage('Test') {
+            when {
+                expression { currentBuild.result == null }
+            }
+            steps {
+                echo 'Running tests...'
+                // Add your test steps here
+            }
+        }
+        stage('Finalize') {
+            when {
+                expression { currentBuild.result == null }
+            }
+            steps {
+                echo 'Finalizing...'
+                sh "docker stop ${CONTAINER_NAME} || true"
+                sh "docker rm ${CONTAINER_NAME} || true"
+            }
+        }
+    }
+    post {
+        always {
+            script {
+                sh 'docker system prune -f'
+            }
+        }
+    }
+}
